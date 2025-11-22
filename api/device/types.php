@@ -13,17 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-$stmt = mysqli_prepare($conn, "SELECT * FROM devices WHERE user_id = ? ORDER BY name ASC LIMIT 200");
-mysqli_stmt_bind_param($stmt, 'i', $user_id);
+$stmt = mysqli_prepare($conn, "SELECT * FROM device_types ORDER BY id ASC"); 
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 
-$devices = mysqli_fetch_all($result, MYSQLI_ASSOC);
+$types = mysqli_fetch_all($result, MYSQLI_ASSOC);
 
 echo json_encode([
     'success' => true,
-    'message' => 'Devices fetched successfully!',
-    'data' => $devices
+    'message' => 'Device types fetched successfully!',
+    'data' => $types
 ]);
 
 exit;

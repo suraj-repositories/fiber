@@ -1,4 +1,5 @@
 <?php
+
 header('Content-Type: application/json');
 
 include('../../partials/dbconfig.php');
@@ -16,74 +17,194 @@ if (!$input) {
     exit;
 }
 
+$device_id  = intval($input['id'] ?? 0);
+$name       = trim($input['name'] ?? '');
+$sub_title  = trim($input['sub_title'] ?? '');
 $device_key = trim($input['device_key'] ?? '');
 $value      = trim($input['value'] ?? '');
-$status     = trim($input['status'] ?? '');
+$values     = $input['values'] ?? [];
+$status     = trim($input['status'] ?? 'active');
+$value_type = trim($input['value_type'] ?? '');
+$point_time = trim($input['point_time'] ?? '');
+$minute_time = $input['minute_time'] ?? null;
 
-if ($device_key === '' || $value === '') {
-    echo json_encode(['success' => false, 'message' => 'device_key and value are required.']);
+if ($device_id <= 0) {
+    echo json_encode(['success' => false, 'message' => 'Invalid Device ID']);
     exit;
 }
 
-$query = "SELECT id, value FROM devices WHERE user_id = ? AND device_key = ? LIMIT 1";
-$stmt  = mysqli_prepare($conn, $query);
-mysqli_stmt_bind_param($stmt, 'is', $user_id, $device_key);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$device = mysqli_fetch_assoc($result);
+if ($name === '' || $device_key === '' || $value_type === '') {
+    echo json_encode(['success' => false, 'message' => 'name, device_key and value_type are required']);
+    exit;
+}
+ 
 
-if (!$device) {
-    echo json_encode(['success' => false, 'message' => 'Device not found.']);
+$deviceQuery = "SELECT id FROM devices WHERE id = ? AND user_id = ? LIMIT 1";
+$deviceStmt = mysqli_prepare($conn, $deviceQuery);
+mysqli_stmt_bind_param($deviceStmt, 'ii', $device_id, $user_id);
+mysqli_stmt_execute($deviceStmt);
+mysqli_stmt_store_result($deviceStmt);
+
+if (mysqli_stmt_num_rows($deviceStmt) === 0) {
+    echo json_encode(['success' => false, 'message' => 'Device not found or unauthorized']);
+    exit;
+}
+ 
+$checkQuery = "SELECT id FROM devices WHERE device_key = ? AND user_id = ? AND id != ? LIMIT 1";
+$checkStmt  = mysqli_prepare($conn, $checkQuery);
+mysqli_stmt_bind_param($checkStmt, 'sii', $device_key, $user_id, $device_id);
+mysqli_stmt_execute($checkStmt);
+mysqli_stmt_store_result($checkStmt);
+
+if (mysqli_stmt_num_rows($checkStmt) > 0) {
+    echo json_encode(['success' => false, 'message' => 'Device key already exists!']);
+    exit;
+}
+ 
+$typeQuery = "SELECT id, type_key FROM device_types WHERE type_key = ? LIMIT 1";
+$typeStmt  = mysqli_prepare($conn, $typeQuery);
+mysqli_stmt_bind_param($typeStmt, 's', $value_type);
+mysqli_stmt_execute($typeStmt);
+
+$result = mysqli_stmt_get_result($typeStmt);
+$deviceType = mysqli_fetch_assoc($result);
+
+if (!$deviceType) {
+    echo json_encode(['success' => false, 'message' => 'Invalid value type!']);
     exit;
 }
 
-$before_value = $device['value'];
-$device_id    = $device['id'];
+$type = $deviceType['type_key'];
+$device_type_id = $deviceType['id'];
+ 
+$valid = true;
+$validationMessage = "";
 
-$updateQuery = "UPDATE devices SET value = ?, status = ?, updated_at = NOW() WHERE id = ?";
-$updateStmt  = mysqli_prepare($conn, $updateQuery);
-mysqli_stmt_bind_param($updateStmt, 'ssi', $value, $status, $device_id);
-mysqli_stmt_execute($updateStmt);
+switch ($type) {
 
-$ip         = $_SERVER['REMOTE_ADDR'] ?? '';
-$deviceInfo = $_SERVER['HTTP_SEC_CH_UA_PLATFORM'] ?? '';
-$browser    = $_SERVER['HTTP_USER_AGENT'] ?? '';
-$os         = php_uname('s');
-$userAgent  = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    case 'toggle':
+        if ($value !== 'on' && $value !== 'off') {
+            $valid = false;
+            $validationMessage = "Invalid toggle value — must be 'on' or 'off'.";
+        }
+        break;
 
-$historyQuery = "
-    INSERT INTO device_history 
-    (user_id, device_id, before_value, after_value, ip, device, browser, os, location, latitude, longitude, user_agent, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', '', ?, NOW(), NOW())
+    case 'progress':
+        if (!is_numeric($value) || (int)$value < 0 || (int)$value > 100) {
+            $valid = false;
+            $validationMessage = "Progress value must be between 0–100.";
+        }
+        break;
+
+    case 'radio':
+        if (empty($values)) {
+            $valid = false;
+            $validationMessage = "Radio values cannot be empty.";
+        }
+        break;
+
+    case 'checkbox':
+        if (empty($values)) {
+            $valid = false;
+            $validationMessage = "Checkbox values cannot be empty.";
+        }
+        break;
+
+    case 'timeout':
+        if (empty($point_time)) {
+            $valid = false;
+            $validationMessage = "Timeout must be valid datetime.";
+        }
+        break;
+
+    case 'interval':
+        if (empty($point_time)) {
+            $valid = false;
+            $validationMessage = "Interval start time is required.";
+        } else if (empty($minute_time) || !is_numeric($minute_time)) {
+            $valid = false;
+            $validationMessage = "Interval minutes must be numeric.";
+        }
+
+        $minute_time = (int) $minute_time;;
+        break;
+    case 'custom': 
+        if(empty($value)){
+            $validationMessage = "The value should not be empty!";
+        }
+        break;
+
+    default:
+        $valid = false;
+        $validationMessage = "Unknown device type.";
+        break;
+}
+
+if (!$valid) {
+    echo json_encode(['success' => false, 'message' => $validationMessage]);
+    exit;
+}
+ 
+
+$valuesArray = !empty($values) ? json_encode($values) : null;
+$point_time = !empty($point_time) ? $point_time : null;
+ 
+
+$updateQuery = "
+    UPDATE devices SET
+        name = ?,
+        sub_title = ?,
+        device_key = ?,
+        device_type_id = ?,
+        value = ?,
+        point_time = ?,
+        minute_time = ?,
+        allowed_values = ?,
+        status = ?,
+        updated_at = NOW()
+    WHERE id = ? AND user_id = ?
 ";
 
-$historyStmt = mysqli_prepare($conn, $historyQuery);
+$stmt = mysqli_prepare($conn, $updateQuery);
 
 mysqli_stmt_bind_param(
-    $historyStmt,
-    'iisssssss',
-    $user_id,
-    $device_id,
-    $before_value,
+    $stmt,
+    'sssississii',
+    $name,
+    $sub_title,
+    $device_key,
+    $device_type_id,
     $value,
-    $ip,
-    $deviceInfo,
-    $browser,
-    $os,
-    $userAgent
+    $point_time,
+    $minute_time,
+    $valuesArray,
+    $status,
+    $device_id,
+    $user_id
 );
 
-mysqli_stmt_execute($historyStmt);
-
-echo json_encode([
-    'success' => true,
-    'message' => 'Device updated successfully.',
-    'device' => [
-        'device_id'    => $device_id,
-        'before_value' => $before_value,
-        'after_value'  => $value,
-        'status'       => $status
-    ]
-]);
+if (mysqli_stmt_execute($stmt)) {
+    echo json_encode([
+        'success' => true,
+        'message' => 'Device updated successfully!',
+        'data' => [
+            'id'             => $device_id,
+            'name'           => $name,
+            'sub_title'      => $sub_title,
+            'device_key'     => $device_key,
+            'device_type_id' => $device_type_id,
+            'value'          => $value,
+            'point_time'     => $point_time,
+            'allowed_values' => json_decode($valuesArray),
+            'status'         => $status
+        ]
+    ]);
+} else {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Device update failed.',
+        'error'   => mysqli_error($conn)
+    ]);
+}
 
 exit;

@@ -49,7 +49,9 @@ mysqli_stmt_execute($deleteStmt);
 echo json_encode([
     'success' => true,
     'message' => 'Device deleted successfully.',
-    'deleted_device_id' => $device_id
+    'data' => [
+        'deleted_device_id' => $device_id
+    ]
 ]);
 
 exit;

@@ -21,10 +21,11 @@ if (!$input) {
     exit;
 }
 
+$name = trim($input['name'] ?? '');
 $username = trim($input['username'] ?? '');
 $password = trim($input['password'] ?? '');
 
-if ($username === '' || $password === '') {
+if ($name === '' || $username === '' || $password === '') {
     echo json_encode([
         'success' => false,
         'message' => 'All fields are required.'
@@ -48,11 +49,11 @@ if (mysqli_stmt_num_rows($checkStmt) > 0) {
 
 $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-$insertQuery = "INSERT INTO users (username, password, created_at, updated_at)
-                VALUES (?, ?, NOW(), NOW())";
+$insertQuery = "INSERT INTO users (name, username, password, created_at, updated_at)
+                VALUES (?, ?, ?, NOW(), NOW())";
 
 $insertStmt = mysqli_prepare($conn, $insertQuery);
-mysqli_stmt_bind_param($insertStmt, 'ss', $username, $hashedPassword);
+mysqli_stmt_bind_param($insertStmt, 'sss', $name, $username, $hashedPassword);
 
 if (mysqli_stmt_execute($insertStmt)) {
     echo json_encode([
