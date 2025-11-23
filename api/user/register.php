@@ -55,17 +55,27 @@ $insertQuery = "INSERT INTO users (name, username, password, created_at, updated
 $insertStmt = mysqli_prepare($conn, $insertQuery);
 mysqli_stmt_bind_param($insertStmt, 'sss', $name, $username, $hashedPassword);
 
-if (mysqli_stmt_execute($insertStmt)) {
-    echo json_encode([
-        'success' => true,
-        'message' => 'Registration successful!'
-    ]);
-} else {
+if (!mysqli_stmt_execute($insertStmt)) {
     echo json_encode([
         'success' => false,
         'message' => 'Registration failed.',
         'error'   => mysqli_error($conn)
     ]);
+    exit;
 }
+
+$userId = mysqli_insert_id($conn);
+
+$apiKey = bin2hex(random_bytes(32));
+ 
+$insertKeyQuery = "INSERT INTO api_keys (user_id, api_key, created_at) VALUES (?, ?, NOW())";
+$insertKeyStmt = mysqli_prepare($conn, $insertKeyQuery);
+mysqli_stmt_bind_param($insertKeyStmt, 'is', $userId, $apiKey);
+mysqli_stmt_execute($insertKeyStmt);
+ 
+echo json_encode([
+    'success' => true,
+    'message' => 'Registration successful!'
+]);
 
 exit;
