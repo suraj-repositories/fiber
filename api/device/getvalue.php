@@ -10,39 +10,112 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-$device_key = trim($_GET['device_key'] ?? '');
+$singleKey = trim($_GET['device_key'] ?? '');
+$multipleKeys = $_GET['device_keys'] ?? null;
 
-if ($device_key === '') {
-    echo json_encode(['success' => false, 'message' => 'device_key is required']);
+if ($multipleKeys !== null) {
+    if (!is_array($multipleKeys)) {
+        $multipleKeys = explode(',', $multipleKeys);
+    }
+}
+
+$keysToFetch = [];
+
+if ($singleKey !== '') {
+    $keysToFetch[] = $singleKey;
+}
+
+if (is_array($multipleKeys)) {
+    foreach ($multipleKeys as $k) {
+        $k = trim($k);
+        if ($k !== '') {
+            $keysToFetch[] = $k;
+        }
+    }
+}
+
+$keysToFetch = array_unique($keysToFetch);
+
+if (empty($keysToFetch)) {
+    echo json_encode(['success' => false, 'message' => 'device_key or device_keys required']);
     exit;
 }
- 
+
+$placeholders = implode(',', array_fill(0, count($keysToFetch), '?'));
+
+$types = str_repeat('s', count($keysToFetch)) . 'i';
+
 $query = "
-    SELECT value 
-    FROM devices 
-    WHERE device_key = ? AND user_id = ?
-    LIMIT 1
+    SELECT devices.id as d_id, device_key, value, device_types.type_key as type, point_time, minute_time
+    FROM devices
+    INNER JOIN device_types ON devices.device_type_id = device_types.id
+    WHERE device_key IN ($placeholders) AND user_id = ?
 ";
 
 $stmt = mysqli_prepare($conn, $query);
-mysqli_stmt_bind_param($stmt, 'si', $device_key, $user_id);
+
+$params = $keysToFetch;
+$params[] = $user_id;
+
+mysqli_stmt_bind_param($stmt, $types, ...$params);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 
-$device = mysqli_fetch_assoc($result);
+$responseData = [];
 
-if (!$device) {
-    echo json_encode(['success' => false, 'message' => 'Device not found']);
-    exit;
+while ($device = mysqli_fetch_assoc($result)) {
+
+    $value = $device['value'];
+    $deviceType = $device['type'];
+ 
+    if ($deviceType == 'timeout') {
+
+        if (date("Y-m-d H:i:00") == $device['point_time']) {
+
+            $updateQuery = "UPDATE devices SET value = '0', updated_at = NOW() WHERE id = ?";
+            $stmtUp = mysqli_prepare($conn, $updateQuery);
+            mysqli_stmt_bind_param($stmtUp, 'i', $device['d_id']);
+            mysqli_stmt_execute($stmtUp);
+
+            $value = 1;
+        }
+    } 
+    else if ($deviceType == "interval") {
+
+        $pointTime = $device['point_time'];
+        $intervalMins = intval($device['minute_time']);
+
+        $now = strtotime(date("Y-m-d H:i:00"));
+        $start = strtotime($pointTime);
+
+        if ($intervalMins > 0 && $start !== false) {
+
+            $diff = $now - $start;
+
+            if ($diff >= 0) {
+                $intervalCount = floor($diff / ($intervalMins * 60));
+                $nextTrigger = $start + ($intervalCount * $intervalMins * 60);
+
+                if ($now == $nextTrigger) {
+
+                    $updateQuery = "UPDATE devices SET value = '1', updated_at = NOW() WHERE id = ?";
+                    $stmtUp = mysqli_prepare($conn, $updateQuery);
+                    mysqli_stmt_bind_param($stmtUp, 'i', $device['d_id']);
+                    mysqli_stmt_execute($stmtUp);
+
+                    $value = 1;
+                }
+            }
+        }
+    }
+ 
+    $responseData[$device['device_key']] = $value;
 }
 
 echo json_encode([
     'success' => true,
-    'message' => 'Value fetched successfully',
-    'data' => [
-        'device_key' => $device_key,
-        'value' => $device['value']
-    ]
+    'message' => 'Values fetched successfully',
+    'data' => $responseData
 ]);
 
 exit;

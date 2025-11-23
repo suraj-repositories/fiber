@@ -104,10 +104,7 @@ if (!$valid) {
     echo json_encode(['success' => false, 'message' => $message]);
     exit;
 }
-
-/* ------------------------------------------------
-   UPDATE ONLY THE VALUE FIELD
--------------------------------------------------*/
+ 
 $updateQuery = "
     UPDATE devices 
     SET value = ?, updated_at = NOW()
