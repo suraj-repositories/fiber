@@ -26,6 +26,7 @@ $status = trim($input['status'] ?? 'active');
 $value_type = trim($input['value_type'] ?? '');
 $point_time = trim($input['point_time'] ?? '');
 $minute_time = $input['minute_time'] ?? null;
+$device_icons_id = $input['device_icons_id'] ?? null;
 
 if ($name === '' || $device_key === '' || $value_type === '') {
     echo json_encode(['success' => false, 'message' => 'name, device_key and value_type are required']);
@@ -55,6 +56,20 @@ if (!$deviceType) {
     echo json_encode(['success' => false, 'message' => 'Invalid value type!']);
     exit;
 }
+ 
+$iconQuery = "SELECT * FROM device_icons WHERE id = ? LIMIT 1";
+$iconStmt  = mysqli_prepare($conn, $iconQuery);
+mysqli_stmt_bind_param($iconStmt, 'i', $device_icons_id);
+mysqli_stmt_execute($iconStmt);
+
+$result = mysqli_stmt_get_result($iconStmt);
+$deviceicon = mysqli_fetch_assoc($result);
+
+if (!$deviceicon) {
+    echo json_encode(['success' => false, 'message' => 'Invalid icon!']);
+    exit;
+}
+ 
 
 $type = $deviceType['type_key'];
 $device_type_id = $deviceType['id'];
@@ -66,8 +81,7 @@ switch ($type) {
 
     case 'toggle':
         if (empty($value)) {
-            $valid = false;
-            $validationMessage = "The value field is required!";
+            $value = 'off';
         } else if ($value !== 'on' && $value !== 'off') {
             $valid = false;
             $validationMessage = "Invalid toggle value — must be 'on' or 'off'.";
@@ -75,16 +89,7 @@ switch ($type) {
         break;
 
     case 'progress':
-        if (!is_numeric($value)) {
-            $valid = false;
-            $validationMessage = "Progress value must be numeric.";
-        } else {
-            $num = (int)$value;
-            if ($num < 0 || $num > 100) {
-                $valid = false;
-                $validationMessage = "Progress value must be between 0–100.";
-            }
-        }
+        $value = 0;
         break;
 
     case 'radio':
@@ -141,15 +146,15 @@ $point_time = !empty($point_time) ? $point_time : null;
 
 $insertQuery = "
     INSERT INTO devices 
-    (user_id, name, sub_title, device_key, device_type_id, value, point_time, minute_time, allowed_values, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    (user_id, name, sub_title, device_key, device_type_id, value, point_time, minute_time, allowed_values, device_icons_id, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
 ";
 
 $stmt = mysqli_prepare($conn, $insertQuery);
 
 mysqli_stmt_bind_param(
     $stmt,
-    'isssississ',
+    'isssissisis',
     $user_id,
     $name,
     $sub_title,
@@ -159,6 +164,7 @@ mysqli_stmt_bind_param(
     $point_time,
     $minute_time,
     $valuesArray,
+    $device_icons_id,
     $status
 );
 

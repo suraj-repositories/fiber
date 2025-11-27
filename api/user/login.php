@@ -1,8 +1,9 @@
 <?php
 include('../../partials/dbconfig.php');
+include('../../partials/fileservice.php');
 require '../../vendor/autoload.php';
- 
-use Firebase\JWT\JWT; 
+
+use Firebase\JWT\JWT;
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../..');
 $dotenv->load();
@@ -30,7 +31,7 @@ if ($username === '' || $password === '') {
     exit;
 }
 
-$stmt = mysqli_prepare($conn, "SELECT id, username, password FROM users WHERE username = ? LIMIT 1");
+$stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE username = ? LIMIT 1");
 mysqli_stmt_bind_param($stmt, 's', $username);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -56,7 +57,13 @@ echo json_encode([
     'success' => true,
     'message' => 'Login successful!',
     'token'   => $jwt,
-    'user'    => ['id' => $user['id'], 'username' => $user['username']]
+    'user'    => [
+        'id' => $user['id'],
+        'username' => $user['username'],
+        'email' => $user['email'],
+        'image' => storage_url($user['image'], '/assets/images/default-user.png'),
+        'name' => $user['name']
+    ]
 ]);
 
 exit;
