@@ -28,6 +28,10 @@ $value_type = trim($input['value_type'] ?? '');
 $point_time = trim($input['point_time'] ?? '');
 $minute_time = $input['minute_time'] ?? null;
 
+$run_type = $input['run_type'] ?? 'manual';
+$run_duration = $input['run_duration'] ?? null;
+$run_until_time = $input['run_until_time'] ?? null;
+
 if ($device_id <= 0) {
     echo json_encode(['success' => false, 'message' => 'Invalid Device ID']);
     exit;
@@ -37,7 +41,6 @@ if ($name === '' || $device_key === '' || $value_type === '') {
     echo json_encode(['success' => false, 'message' => 'name, device_key and value_type are required']);
     exit;
 }
- 
 
 $deviceQuery = "SELECT id FROM devices WHERE id = ? AND user_id = ? LIMIT 1";
 $deviceStmt = mysqli_prepare($conn, $deviceQuery);
@@ -49,7 +52,7 @@ if (mysqli_stmt_num_rows($deviceStmt) === 0) {
     echo json_encode(['success' => false, 'message' => 'Device not found or unauthorized']);
     exit;
 }
- 
+
 $checkQuery = "SELECT id FROM devices WHERE device_key = ? AND user_id = ? AND id != ? LIMIT 1";
 $checkStmt  = mysqli_prepare($conn, $checkQuery);
 mysqli_stmt_bind_param($checkStmt, 'sii', $device_key, $user_id, $device_id);
@@ -60,7 +63,7 @@ if (mysqli_stmt_num_rows($checkStmt) > 0) {
     echo json_encode(['success' => false, 'message' => 'Device key already exists!']);
     exit;
 }
- 
+
 $typeQuery = "SELECT id, type_key FROM device_types WHERE type_key = ? LIMIT 1";
 $typeStmt  = mysqli_prepare($conn, $typeQuery);
 mysqli_stmt_bind_param($typeStmt, 's', $value_type);
@@ -76,7 +79,7 @@ if (!$deviceType) {
 
 $type = $deviceType['type_key'];
 $device_type_id = $deviceType['id'];
- 
+
 $valid = true;
 $validationMessage = "";
 
@@ -115,6 +118,36 @@ switch ($type) {
             $valid = false;
             $validationMessage = "Timeout must be valid datetime.";
         }
+
+        if (empty($run_type)) {
+            $valid = false;
+            $validationMessage = "Run type is required";
+        }
+        if ($run_type == 'run_for_duration' && empty($run_duration)) {
+            $valid = false;
+            $validationMessage = "Run Deration field is requrired";
+        }
+        if ($run_type == 'run_until_time' && empty($run_until_time)) {
+            $valid = false;
+            $validationMessage = "Run until time is required!";
+        }
+        if (!empty($run_until_time)) {
+            $pointTs = strtotime($point_time);
+            $runUntilTs = strtotime($run_until_time);
+
+            if ($runUntilTs === false || $pointTs === false) {
+                $valid = false;
+                $validationMessage = "Invalid date/time format.";
+            } elseif ($runUntilTs <= $pointTs) {
+                $valid = false;
+                $validationMessage = "Run until time must be greater than point time.";
+            }
+        }
+
+        if (!in_array($run_type, ['run_for_duration', 'run_until_time', 'run_once'])) {
+            $valid = false;
+            $validationMessage = 'Invalid run type!';
+        }
         break;
 
     case 'interval':
@@ -126,10 +159,23 @@ switch ($type) {
             $validationMessage = "Interval minutes must be numeric.";
         }
 
+        if (empty($run_type)) {
+            $valid = false;
+            $validationMessage = "Run type is required";
+        }
+        if ($run_type == 'run_for_duration' && empty($run_duration)) {
+            $valid = false;
+            $validationMessage = "Run Deration field is requrired";
+        }
+        if (!in_array($run_type, ['run_for_duration', 'run_once'])) {
+            $valid = false;
+            $validationMessage = 'Invalid run type!';
+        }
+
         $minute_time = (int) $minute_time;;
         break;
-    case 'custom': 
-        if(empty($value)){
+    case 'custom':
+        if (empty($value)) {
             $validationMessage = "The value should not be empty!";
         }
         break;
@@ -144,11 +190,11 @@ if (!$valid) {
     echo json_encode(['success' => false, 'message' => $validationMessage]);
     exit;
 }
- 
+
 
 $valuesArray = !empty($values) ? json_encode($values) : null;
 $point_time = !empty($point_time) ? $point_time : null;
- 
+
 
 $updateQuery = "
     UPDATE devices SET
