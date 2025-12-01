@@ -205,6 +205,9 @@ $updateQuery = "
         value = ?,
         point_time = ?,
         minute_time = ?,
+        run_type = ?,
+        run_duration = ?,
+        run_until_time = ?,
         allowed_values = ?,
         status = ?,
         updated_at = NOW()
@@ -215,7 +218,7 @@ $stmt = mysqli_prepare($conn, $updateQuery);
 
 mysqli_stmt_bind_param(
     $stmt,
-    'sssississii',
+    'sssissisisssii',
     $name,
     $sub_title,
     $device_key,
@@ -223,6 +226,9 @@ mysqli_stmt_bind_param(
     $value,
     $point_time,
     $minute_time,
+    $run_type,
+    $run_duration,
+    $run_until_time,
     $valuesArray,
     $status,
     $device_id,
