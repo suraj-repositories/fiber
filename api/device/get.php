@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $getQuery = "
-SELECT devices.*,device_types.name as device_type_name, device_types.type_key as device_type FROM devices
+SELECT devices.*,device_types.name as device_type_name, device_types.type_key as value_type FROM devices
 INNER JOIN device_types ON devices.device_type_id = device_types.id
  WHERE user_id = ? 
  ORDER BY name ASC LIMIT 200
