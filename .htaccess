@@ -1,9 +1,7 @@
 RewriteEngine On
-
-# Redirect root to /web/
+ 
 RewriteRule ^$ web/ [L]
-
-# For non-existing files/folders, route them to /web/
+ 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ web/$1 [L]
