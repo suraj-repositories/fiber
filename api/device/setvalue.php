@@ -20,11 +20,20 @@ if (!$input) {
 $device_key = trim($input['device_key'] ?? '');
 $value      = trim($input['value'] ?? '');
 
+$ip         = $input['ip'] ?? $_SERVER['REMOTE_ADDR'];
+$deviceInfo = $input['device'] ?? '';
+$browser    = $input['browser'] ?? '';
+$os         = $input['os'] ?? '';
+$location   = $input['location'] ?? '';
+$lat        = $input['latitude'] ?? '';
+$lng        = $input['longitude'] ?? '';
+$user_agent = $_SERVER['HTTP_USER_AGENT'];
+
 if ($device_key === '') {
     echo json_encode(['success' => false, 'message' => 'device_key is required']);
     exit;
 }
- 
+
 $query = "
     SELECT d.id, d.value, d.allowed_values, dt.type_key 
     FROM devices d
@@ -38,16 +47,18 @@ mysqli_stmt_bind_param($stmt, 'si', $device_key, $user_id);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 
-$device = mysqli_fetch_assoc($result);
+$deviceRow = mysqli_fetch_assoc($result);
 
-if (!$device) {
+if (!$deviceRow) {
     echo json_encode(['success' => false, 'message' => 'Device not found']);
     exit;
 }
 
-$type = $device['type_key'];
-$allowed_values = json_decode($device['allowed_values'] ?? "[]", true);
- 
+$device_id     = $deviceRow['id'];
+$before_value  = $deviceRow['value'];
+$type          = $deviceRow['type_key'];
+$allowed_values = json_decode($deviceRow['allowed_values'] ?? "[]", true);
+
 $valid = true;
 $message = "";
 
@@ -68,30 +79,23 @@ switch ($type) {
         break;
 
     case 'radio':
-        if (!in_array($value, $allowed_values)) {
-            $valid = false;
-            $message = "Invalid value — must match one of the radio allowed values.";
-        }
-        break;
-
     case 'checkbox':
         if (!in_array($value, $allowed_values)) {
             $valid = false;
-            $message = "Invalid value — must match one of the checkbox allowed values.";
+            $message = "Invalid value — must match allowed values.";
         }
         break;
-    case 'custom': 
-        if(empty($value)){
-            $validationMessage = "The value should not be empty!";
+
+    case 'custom':
+        if (empty($value)) {
+            $valid = false;
+            $message = "Value cannot be empty.";
         }
         break;
 
     case 'timeout':
     case 'interval':
-        echo json_encode([
-            'success' => false,
-            'message' => 'This device type is not editable.'
-        ]);
+        echo json_encode(['success' => false, 'message' => 'This device type is not editable']);
         exit;
 
     default:
@@ -111,24 +115,56 @@ $updateQuery = "
     WHERE device_key = ? AND user_id = ?
 ";
 
-$stmt = mysqli_prepare($conn, $updateQuery);
-mysqli_stmt_bind_param($stmt, 'ssi', $value, $device_key, $user_id);
+$updateStmt = mysqli_prepare($conn, $updateQuery);
+mysqli_stmt_bind_param($updateStmt, 'ssi', $value, $device_key, $user_id);
 
-if (mysqli_stmt_execute($stmt)) {
-    echo json_encode([
-        'success' => true,
-        'message' => 'Value updated successfully!',
-        'data' => [
-            'device_key' => $device_key,
-            'value' => $value
-        ]
-    ]);
-} else {
+if (!mysqli_stmt_execute($updateStmt)) {
     echo json_encode([
         'success' => false,
         'message' => 'Update failed',
         'error' => mysqli_error($conn)
     ]);
+    exit;
 }
+ 
+$historyQuery = "
+INSERT INTO device_history (
+    user_id, device_id, before_value, after_value,
+    ip, device, browser, os, location,
+    latitude, longitude, user_agent,
+    created_at, updated_at
+)
+VALUES (?,?,?,?,?,?,?,?,?,?,?,?, NOW(), NOW())
+";
+
+$historyStmt = mysqli_prepare($conn, $historyQuery);
+mysqli_stmt_bind_param(
+    $historyStmt,
+    "iissssssssss",
+    $user_id,
+    $device_id,
+    $before_value,
+    $value,
+    $ip,
+    $deviceInfo,
+    $browser,
+    $os,
+    $location,
+    $lat,
+    $lng,
+    $user_agent
+);
+
+mysqli_stmt_execute($historyStmt);
+ 
+echo json_encode([
+    'success' => true,
+    'message' => 'Value updated successfully!',
+    'data' => [
+        'device_key' => $device_key,
+        'old_value'  => $before_value,
+        'new_value'  => $value
+    ]
+]);
 
 exit;
