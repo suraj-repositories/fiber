@@ -35,26 +35,26 @@ if(!isUnique('users', ['username' => $username], ['id' => $user['id']])){
     exit;
 } 
 
-if (isset($_FILES["image"])) {
-    if (!(isset($_FILES["image"]) && $_FILES["image"]["error"] == 0)) {
-        echo json_encode(['success' => false, 'message' => 'Invalid value type!']);
-        exit;
-    }
+if (isset($_FILES["image"]) 
+    && $_FILES["image"]["error"] == 0 
+    && $_FILES["image"]["size"] > 0) {
 
     $file_mime_type = mime_content_type($_FILES['image']["tmp_name"]);
     $allowed_mime_types = ['image/jpeg', 'image/jpg', 'image/png'];
+
     if (!in_array($file_mime_type, $allowed_mime_types)) {
         echo json_encode(['success' => false, 'message' => 'Invalid file type. Only JPEG, JPG, and PNG are allowed.']);
         exit();
     }
 
-    $uploadedFile = uploadFile($_FILES["image"], $directory = 'profile');
+    $uploadedFile = uploadFile($_FILES["image"], 'profile');
     if ($uploadedFile) {
         deleteIfExists($user['image']);
     }
 
     $image = $uploadedFile;
 }
+
 
 $updateQuery = "
     UPDATE users SET
