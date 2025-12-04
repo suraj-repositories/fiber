@@ -34,7 +34,7 @@ if (!isUnique('users', ['username' => $username], ['id' => $user['id']])) {
     echo json_encode(['success' => false, 'message' => 'Username must be unique!']);
     exit;
 } 
-$answer = empty($_FILES['image']) ? 'no image' : ($_FILES['image']['error'] . ' ' . $_FILES['image']['size']);
+$answer = '>>>' . empty($_FILES['image']) ? 'no image' : ($_FILES['image']['error'] .'|' . UPLOAD_ERR_OK. '|' . $_FILES['image']['size']);
 if (!empty($_FILES['image']) 
     && $_FILES['image']['error'] === UPLOAD_ERR_OK
     && $_FILES['image']['size'] > 0
