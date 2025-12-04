@@ -69,11 +69,12 @@ function url($path = '', $default = '/assets/images/placeholder.png')
 {
     $placeholder = $default;
 
+    
     if (!$path || $path === '') {
         return rtrim($_ENV['APP_URL'], '/') . $placeholder;
     }
-
-    $absolute = __DIR__ . '/../public/' . ltrim($path, '/');
+    
+    $absolute = __DIR__ . '/../' . ltrim($path, '/'); 
 
     if (!file_exists($absolute)) {
         return rtrim($_ENV['APP_URL'], '/') . $placeholder;
@@ -92,7 +93,7 @@ function storage_url($path = '', $default = '/assets/images/placeholder.png')
 
     $relative = ltrim($path, '/');
     $absolute = STORAGE . $relative;
-
+     
     if (!file_exists($absolute)) {
         return url($placeholder, $default);
     }

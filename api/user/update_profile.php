@@ -30,31 +30,31 @@ $email = $_POST['email'];
 $name = $_POST['name'];
 $image = $user['image'];
 
-if(!isUnique('users', ['username' => $username], ['id' => $user['id']])){
-     echo json_encode(['success' => false, 'message' => 'Username must be unique!']);
+if (!isUnique('users', ['username' => $username], ['id' => $user['id']])) {
+    echo json_encode(['success' => false, 'message' => 'Username must be unique!']);
     exit;
 } 
 
-if (isset($_FILES["image"]) 
-    && $_FILES["image"]["error"] == 0 
-    && $_FILES["image"]["size"] > 0) {
-
+if (!empty($_FILES['image']) 
+    && $_FILES['image']['error'] === UPLOAD_ERR_OK
+    && $_FILES['image']['size'] > 0
+) {
     $file_mime_type = mime_content_type($_FILES['image']["tmp_name"]);
     $allowed_mime_types = ['image/jpeg', 'image/jpg', 'image/png'];
 
     if (!in_array($file_mime_type, $allowed_mime_types)) {
-        echo json_encode(['success' => false, 'message' => 'Invalid file type. Only JPEG, JPG, and PNG are allowed.']);
-        exit();
+        echo json_encode(['success' => false, 'message' => 'Invalid file type.']);
+        exit;
     }
 
     $uploadedFile = uploadFile($_FILES["image"], 'profile');
+
     if ($uploadedFile) {
         deleteIfExists($user['image']);
     }
 
     $image = $uploadedFile;
 }
-
 
 $updateQuery = "
     UPDATE users SET
