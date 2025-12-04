@@ -34,7 +34,7 @@ if (!isUnique('users', ['username' => $username], ['id' => $user['id']])) {
     echo json_encode(['success' => false, 'message' => 'Username must be unique!']);
     exit;
 } 
-
+$answer = empty($_FILES['image']) ? 'no image' : ($_FILES['image']['error'] . ' ' . $_FILES['image']['size']);
 if (!empty($_FILES['image']) 
     && $_FILES['image']['error'] === UPLOAD_ERR_OK
     && $_FILES['image']['size'] > 0
@@ -81,13 +81,14 @@ mysqli_stmt_bind_param(
 if (mysqli_stmt_execute($stmt)) {
     echo json_encode([
         'success' => true,
-        'message' => 'Profile updated successfully!',
+        'message' => 'Profile updated successfully!' . $answer,
         'data' => [
             'id'             => $user['id'],
             'name'           => $name,
             'username'       => $username,
             'image'          => storage_url($image, '/assets/images/default-user.png'),
-            'email'          => $email
+            'email'          => $email,
+            
         ]
     ]);
 } else {
