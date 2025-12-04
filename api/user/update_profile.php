@@ -35,18 +35,11 @@ if (!isUnique('users', ['username' => $username], ['id' => $user['id']])) {
     exit;
 } 
 
-$answer = '>>>' . (empty($_FILES['image']) 
-    ? 'no image' 
-    : ($_FILES['image']['error'] .'|' . UPLOAD_ERR_OK . '|' . $_FILES['image']['size'])
-);
-
-
 if (!empty($_FILES['image']) 
     && $_FILES['image']['error'] === UPLOAD_ERR_OK
     && $_FILES['image']['size'] > 0
 ) {
-
-    $answer .= 'uploading....';
+ 
     $file_mime_type = mime_content_type($_FILES['image']["tmp_name"]);
     $allowed_mime_types = ['image/jpeg', 'image/jpg', 'image/png'];
 
